@@ -9,7 +9,7 @@ AQUI = os.path.dirname(os.path.abspath(__file__)); TMP = os.path.join(AQUI, 'pos
 W, H, FPS, N = 1080, 1920, 30, 90
 LED_ON, ESPUMA = 26, 44
 F = '/usr/share/fonts/opentype/inter/InterDisplay-'
-BLANCO = (247, 245, 242); ORO = (232, 168, 136)
+BLANCO = (32, 30, 30); ORO = (176, 104, 70)          # sobre pared clara: texto carbón y oro rosa oscuro
 
 def suave(x): x = max(0.0, min(1.0, x)); return 1 - (1 - x) ** 3
 
@@ -27,7 +27,7 @@ def texto(im, partes, cy, tam, k, fuente='Bold', trk=0.02, sube=0.0):
     for t, col in partes:
         letras(dc, x, y, t, fnt, col + (int(255 * k),), tr); x += ancho(dc, t, fnt, tr) + tr
     if k < 1: capa = capa.filter(ImageFilter.GaussianBlur(14 * (1 - k)))
-    sombra = Image.new('RGBA', (W, H), (0, 0, 0, 0)); sombra.putalpha(capa.split()[3].filter(ImageFilter.GaussianBlur(18)).point(lambda p: int(p * 0.55)))
+    sombra = Image.new('RGBA', (W, H), (0, 0, 0, 0)); sombra.putalpha(capa.split()[3].filter(ImageFilter.GaussianBlur(18)).point(lambda p: int(p * 0.18)))
     im = Image.alpha_composite(im.convert('RGBA'), sombra); return Image.alpha_composite(im, capa)
 
 yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
@@ -37,7 +37,7 @@ rng = np.random.default_rng(3)
 def acabado(im):
     a = np.asarray(im).astype(np.float32) / 255
     lum = (a @ np.array([0.2126, 0.7152, 0.0722], np.float32))[..., None]
-    brillo = np.clip(a - 0.9, 0, 1) * 4                                         # bloom: solo lo más brillante (LED, reflejos), no la pared
+    brillo = np.clip(a[..., 2:3] - a[..., 0:1] - 0.25, 0, 1) * np.array([0.35, 0.6, 1.0], np.float32) * 2   # bloom: solo el azul del LED
     b = np.asarray(Image.fromarray((brillo * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(26))).astype(np.float32) / 255
     b2 = np.asarray(Image.fromarray((brillo * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(70))).astype(np.float32) / 255
     a = a + b * 0.5 + b2 * 0.3
@@ -55,7 +55,7 @@ for f in range(1, N + 1):
     k2 = suave((f - LED_ON) / 8)
     im = texto(im, [('Ni lo ', BLANCO), ('toques.', ORO)], 0.17, 118, k2, fuente='Black', trk=0.0, sube=0.015)
     k3 = suave((f - ESPUMA - 6) / 10)
-    im = texto(im, [('ESPUMA AUTOMÁTICA', (225, 222, 218))], 0.225, 34, k3, fuente='SemiBold', trk=0.28)
+    im = texto(im, [('ESPUMA AUTOMÁTICA', (70, 66, 64))], 0.225, 34, k3, fuente='SemiBold', trk=0.28)
     im.convert('RGB').save(os.path.join(TMP, f'p{f:04d}.png'))
 
 # sonido: ambiente + barrido al empezar + campanilla al encenderse + espuma
