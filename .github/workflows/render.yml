@@ -1,0 +1,69 @@
+# Render del teaser 3D del dispensador en GitHub Actions (repositorio público: minutos gratis y sin límite).
+# Se lanza con un push cuyo mensaje lleve «[render]» (máxima calidad) o «[render prueba]» (baja calidad), o a mano desde Actions.
+name: Render
+
+on:
+  workflow_dispatch:
+    inputs:
+      ancho: { description: 'Ancho del render (1080 final; 360 prueba)', default: '1080', type: string }
+      muestras: { description: 'Muestras de Cycles (256 final; 24 prueba)', default: '256', type: string }
+  push:
+    branches: [main]
+
+env:
+  TROZOS: 20
+  TOTAL: 90
+  INTER: https://github.com/rsms/inter/releases/download/v4.0/Inter-4.0.zip
+
+jobs:
+  preparar:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[render')
+    runs-on: ubuntu-latest
+    outputs: { ancho: '${{ steps.p.outputs.ancho }}', muestras: '${{ steps.p.outputs.muestras }}' }
+    steps:
+      - id: p
+        env: { MENSAJE: '${{ github.event.head_commit.message }}' }
+        run: |
+          A="${{ inputs.ancho }}"; M="${{ inputs.muestras }}"
+          if echo "$MENSAJE" | grep -q '\[render prueba'; then A=360; M=24; fi
+          echo "ancho=${A:-1080}" >> $GITHUB_OUTPUT; echo "muestras=${M:-256}" >> $GITHUB_OUTPUT
+
+  render:
+    needs: preparar
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: true
+      matrix: { trozo: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Blender
+        run: |
+          sudo apt-get install -y -qq libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libsm6 > /dev/null
+          pip install -q bpy pillow numpy
+      - name: Render
+        run: |
+          N=$(( (TOTAL + TROZOS - 1) / TROZOS )); D=$(( 1 + ${{ matrix.trozo }} * N )); H=$(( D + N - 1 )); [ $H -gt $TOTAL ] && H=$TOTAL
+          if [ $D -gt $TOTAL ]; then echo "nada que renderizar"; mkdir -p render; exit 0; fi
+          python escena.py --salida render --ancho ${{ needs.preparar.outputs.ancho }} --muestras ${{ needs.preparar.outputs.muestras }} --desde $D --hasta $H | grep '^fotograma'
+      - uses: actions/upload-artifact@v4
+        with: { name: 'fotogramas-${{ matrix.trozo }}', path: render/*.png, retention-days: 3, if-no-files-found: ignore }
+
+  montar:
+    needs: render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { pattern: fotogramas-*, merge-multiple: true, path: render }
+      - name: Montar
+        run: |
+          curl -sSL "$INTER" -o /tmp/inter.zip && unzip -q -o /tmp/inter.zip -d /tmp/inter
+          sudo mkdir -p /usr/share/fonts/opentype/inter && sudo cp /tmp/inter/extras/otf/*.otf /usr/share/fonts/opentype/inter/
+          sudo apt-get install -y -qq ffmpeg > /dev/null && pip install -q pillow numpy
+          ls render | wc -l
+          python montaje.py render teaser.mp4
+      - uses: actions/upload-artifact@v4
+        with: { name: teaser, path: teaser.mp4, retention-days: 30 }
