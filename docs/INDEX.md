@@ -6,7 +6,7 @@ Vídeos 3D del dispensador automático de jabón en espuma (Blender + Cycles), r
 |---|---|
 | Escena 3D (dispensador, espuma, baño, luz, cámara) | `escena.py` |
 | Pantalla LED | `pantalla_led.py`, `recursos/led.png` |
-| Montaje final (escala, etalonaje, textos, sonido → `teaser.mp4`) | `montaje.py` |
+| Montaje final (escala, etalonaje, textos, sonido → teaser.mp4) | `montaje.py` |
 | Efectos de sonido (ElevenLabs) | `sonidos.py`, `sonidos/*.mp3` |
 | HDRI y texturas (Poly Haven, CC0) | `recursos/` |
 | Lanzar el render | `.github/workflows/render.yml` |
