@@ -12,7 +12,9 @@ on:
 
 env:
   TROZOS: 20
-  TOTAL: 90
+  TOTAL: 105
+  ESCENA: escena_bano.py      # escena.py = teaser del producto solo (90 fotogramas)
+  MONTAJE: montaje_bano.py
   INTER: https://github.com/rsms/inter/releases/download/v4.0/Inter-4.0.zip
 
 jobs:
@@ -47,7 +49,7 @@ jobs:
         run: |
           N=$(( (TOTAL + TROZOS - 1) / TROZOS )); D=$(( 1 + ${{ matrix.trozo }} * N )); H=$(( D + N - 1 )); [ $H -gt $TOTAL ] && H=$TOTAL
           if [ $D -gt $TOTAL ]; then echo "nada que renderizar"; mkdir -p render; exit 0; fi
-          python escena.py --salida render --ancho ${{ needs.preparar.outputs.ancho }} --muestras ${{ needs.preparar.outputs.muestras }} --desde $D --hasta $H | grep '^fotograma'
+          python $ESCENA --salida render --ancho ${{ needs.preparar.outputs.ancho }} --muestras ${{ needs.preparar.outputs.muestras }} --desde $D --hasta $H | grep '^fotograma'
       - uses: actions/upload-artifact@v4
         with: { name: 'fotogramas-${{ matrix.trozo }}', path: render/*.png, retention-days: 3, if-no-files-found: ignore }
 
@@ -64,6 +66,6 @@ jobs:
           sudo mkdir -p /usr/share/fonts/opentype/inter && sudo cp /tmp/inter/extras/otf/*.otf /usr/share/fonts/opentype/inter/
           sudo apt-get install -y -qq ffmpeg > /dev/null && pip install -q pillow numpy
           ls render | wc -l
-          python montaje.py render teaser.mp4
+          python $MONTAJE render teaser.mp4
       - uses: actions/upload-artifact@v4
         with: { name: teaser, path: teaser.mp4, retention-days: 30 }

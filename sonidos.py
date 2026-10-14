@@ -5,6 +5,7 @@ EFECTOS = {
     'ambiente': ('quiet modern bathroom room tone, very soft low cinematic drone, premium product commercial', 3.5),
     'barrido': ('subtle airy cinematic whoosh, light sweeping across glossy surface, premium product reveal', 1.2),
     'encendido': ('soft elegant digital chime, smart device display turning on, clean high-end UI sound', 1.0),
+    'pasos': ('soft footsteps walking slowly into a quiet bathroom on tile floor, indoor, morning, close mic', 2.5),
     'espuma': ('soft foam soap dispenser pump, gentle airy squish of thick foam coming out, close up', 1.2),
 }
 for n in sys.argv[1:] or EFECTOS:
