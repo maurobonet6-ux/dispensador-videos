@@ -7,7 +7,7 @@ import sys, os, math, argparse, glob
 AQUI = os.path.dirname(os.path.abspath(__file__)); REC = os.path.join(AQUI, 'recursos')
 a = argparse.ArgumentParser()
 a.add_argument('--salida', required=True); a.add_argument('--ancho', type=int, default=1080); a.add_argument('--muestras', type=int, default=256)
-a.add_argument('--desde', type=int, default=1); a.add_argument('--hasta', type=int, default=105); a.add_argument('--lista', default='')
+a.add_argument('--desde', type=int, default=1); a.add_argument('--hasta', type=int, default=570); a.add_argument('--lista', default='')
 args = a.parse_args()
 
 # ---------- 1. el dispensador (el mismo modelo de escena.py, en metros, con la espalda en y=0 mirando a -y) ----------
@@ -21,13 +21,22 @@ sc = g['sc']; principled, tex_pbr = g['principled'], g['tex_pbr']
 piezas = [o for o in sc.objects if o.parent is None]
 raiz = bpy.data.objects.new('Dispensador', None); sc.collection.objects.link(raiz)
 for o in piezas: o.parent = raiz
-FPS, TOTAL = 30, 105
+FPS = 30
+# Planos (fotogramas globales): entrada, mano real, pantalla, botones, apagado, adhesivo, USB-C, dos versiones
+PLANOS = [('entrada', 1, 105), ('mano', 106, 153), ('pantalla', 154, 225), ('botones', 226, 285), ('apagado', 286, 345),
+          ('adhesivo', 346, 405), ('usb', 406, 450), ('versiones', 451, 570)]
+TOTAL = PLANOS[-1][2]
+P = {n: (a_, b_) for n, a_, b_ in PLANOS}
 T_LED = 64                                   # la pantalla se enciende al detectarte (te acercas al lavabo)
 on = g['on']; g['mp_'].node_tree.animation_data_clear()
-for f, v in ((1, 0), (T_LED, 0), (T_LED + 1, 1.4), (T_LED + 2, 0.3), (T_LED + 4, 2.0)):
+a5 = P['apagado'][0]
+for f, v in ((1, 0), (T_LED, 0), (T_LED + 1, 1.4), (T_LED + 2, 0.3), (T_LED + 4, 2.0), (a5 + 22, 2.0), (a5 + 40, 0.0),    # se apaga sola
+             (P['adhesivo'][1], 0.0), (P['usb'][0], 2.0), (TOTAL, 2.0)):
     on.outputs[0].default_value = v; on.outputs[0].keyframe_insert('default_value', frame=f)
 for fc in g['curvas'](g['mp_'].node_tree):
     for k in fc.keyframe_points: k.interpolation = 'LINEAR'
+# cristal con huellas y marcas casi invisibles (lo que delata que es real)
+g['micro'](bpy.data.materials['CristalM'], escala=120, fuerza=0.004, rug=(0.0, 0.07))
 
 # ---------- 2. el baño (FBX) a escala real ----------
 _l = bpy.data.lights.new('_x', 'POINT'); type(_l.cycles).cast_shadow = bpy.props.BoolProperty(); bpy.data.lights.remove(_l)  # fallo del importador FBX
@@ -51,9 +60,10 @@ plantas.location += Vector((-0.70 - min(v.x for v in bb), 0, ENCIMERA - min(v.z 
 
 # pared del fondo exacta (rayo hacia la pared) y sitio del dispensador: a la derecha del espejo, sobre el lavabo
 dg = bpy.context.evaluated_depsgraph_get()
-ok, loc, *_ = sc.ray_cast(dg, Vector((-0.04, 0.0, 1.30)), Vector((0, 1, 0)))
+ok, loc, *_ = sc.ray_cast(dg, Vector((0.06, 0.0, 1.43)), Vector((0, 1, 0)))
 PARED_Y = loc.y if ok else 1.80
-raiz.location = (-0.04, PARED_Y - 0.0005, 1.30)
+X0, Z0 = 0.06, 1.43                                # anclado a la pared, 13 cm por encima del resalte
+raiz.location = (X0, PARED_Y - 0.0005, Z0)
 # tapa el hueco que deja la balda quitada (por detrás de la pared, solo se ve por el hueco)
 bpy.ops.mesh.primitive_plane_add(size=1, location=(0, PARED_Y + 0.003, 1.24), rotation=(math.radians(90), 0, 0))
 tapa_hueco = bpy.context.object; tapa_hueco.scale = (3.0, 0.2, 1); tapa_hueco.name = 'TapaHueco'
@@ -68,8 +78,8 @@ def con_textura(nombre, img, rug=0.5, coat=0.0, metal=0.0, brillo=1.0):
         hs = N.new('ShaderNodeHueSaturation'); hs.inputs['Value'].default_value = brillo; L.new(col, hs.inputs['Color']); col = hs.outputs['Color']
     L.new(col, N['Principled BSDF'].inputs['Base Color']); return m
 
-rosa = tex_pbr(principled('ParedRosa'), 'painted_plaster_wall', 1.2, tinte=(0.95, 0.58, 0.50), sat=0.0, valor=1.1, normal=0.35, coords='Object')
-blanca = tex_pbr(principled('ParedBlanca'), 'painted_plaster_wall', 1.2, tinte=(0.92, 0.90, 0.86), sat=0.0, valor=1.1, normal=0.3, coords='Object')
+rosa = tex_pbr(principled('ParedRosa'), 'painted_plaster_wall', 3.5, tinte=(1.0, 0.64, 0.56), sat=0.0, valor=1.3, normal=0.22, coords='Object')
+blanca = tex_pbr(principled('ParedBlanca'), 'painted_plaster_wall', 3.5, tinte=(0.92, 0.90, 0.86), sat=0.0, valor=1.1, normal=0.3, coords='Object')
 techo = principled('Techo', (0.86, 0.85, 0.82), rug=0.9)
 suelo = tex_pbr(principled('Suelo'), 'large_floor_tiles_02', 0.9, tinte=(0.95, 0.90, 0.82), sat=0.3, normal=0.5, coords='Object')
 for m_ in (rosa, blanca, suelo):                    # proyección en caja: la textura no se estira en las paredes verticales
@@ -121,38 +131,158 @@ po = bpy.data.objects.new('Portal', port); sc.collection.objects.link(po); po.lo
 po.rotation_euler = (0, math.radians(90), 0)
 bombilla = bpy.data.lights.new('Colgante', 'POINT'); bombilla.energy = 25; bombilla.color = (1.0, 0.78, 0.55); bombilla.shadow_soft_size = 0.05
 bo = bpy.data.objects.new('Colgante', bombilla); sc.collection.objects.link(bo); bo.location = (1.07 * ESC, 3.0 * ESC, 3.45 * ESC)
-rebote = bpy.data.lights.new('Rebote', 'AREA'); rebote.energy = 18; rebote.size = 1.2; rebote.color = (1.0, 0.95, 0.9)
+rebote = bpy.data.lights.new('Rebote', 'AREA'); rebote.energy = 40; rebote.size = 1.2; rebote.color = (1.0, 0.95, 0.9)
 ro = bpy.data.objects.new('Rebote', rebote); sc.collection.objects.link(ro); ro.location = (0.2, -1.0, 1.9)
 ro.rotation_euler = (Vector((-0.2, PARED_Y, 1.2)) - ro.location).to_track_quat('-Z', 'Y').to_euler(); ro.visible_camera = False
 
-# ---------- 5. cámara de móvil en mano: entras al baño y te acercas al lavabo ----------
+# ---------- 5. piezas de los planos de producto ----------
+D_, W_, H_ = g['D'], g['W'], g['H']
+FRENTE = PARED_Y - D_ - 0.006                                   # cara del cristal
+CENTRO = Vector((X0, PARED_Y - D_ / 2, Z0))
+def ocultar_fuera(o, a_, b_):
+    """Visible solo entre los fotogramas a_ y b_."""
+    for f, v in ((1, True), (a_, False), (b_ + 1, True)):
+        o.hide_render = v; o.keyframe_insert('hide_render', frame=f)
+# placas adhesivas transparentes en la pared (se ven cuando el dispensador se separa)
+acril = principled('Acrilico', (0.96, 0.96, 0.95), rug=0.22, coat=0.6, **{'Alpha': 0.45})   # almohadilla adhesiva translúcida
+for dx in (-0.045, 0.045):
+    pl = g['caja']('Adhesivo', (0.045, 0.0025, 0.045), (X0 + dx, PARED_Y - 0.0013, Z0), acril, bisel=0.0007)
+    ocultar_fuera(pl, *P['adhesivo'])
+# puerto USB-C en el lateral derecho y el cable que entra (plano USB)
+negro_mate = principled('PuertoM', (0.003, 0.003, 0.003), rug=0.6)
+puerto = g['caja']('Puerto', (0.004, 0.0092, 0.0034), (W_ / 2 - 0.0012, -D_ * 0.62, -0.004), negro_mate, bisel=0.0012); puerto.parent = raiz
+blanco_cable = principled('CableM', (0.92, 0.92, 0.9), rug=0.35, coat=0.2)
+metal_c = principled('ClavijaM', (0.85, 0.85, 0.87), metal=1.0, rug=0.15)
+clavija = bpy.data.objects.new('Clavija', None); sc.collection.objects.link(clavija); clavija.parent = raiz
+for nombre, tam, loc, mat in (('Funda', (0.022, 0.012, 0.0068), (0.016, 0, 0), blanco_cable), ('Punta', (0.0068, 0.0083, 0.0026), (0.0012, 0, 0), metal_c)):
+    o = g['caja'](nombre, tam, loc, mat, bisel=min(tam) * 0.35); o.parent = clavija
+cable = g['cilindro']('Cable', 0.0019, 0.45, (0.027 + 0.225, 0, 0), blanco_cable, rot=(0, math.radians(90), 0)); cable.parent = clavija
+u0, u1 = P['usb']
+for f, x in ((1, 0.08), (u0 + 6, 0.06), (u0 + 24, 0.0002), (TOTAL, 0.0002)):
+    clavija.location = (W_ / 2 + x, -D_ * 0.62, -0.004); clavija.keyframe_insert('location', frame=f)
+for o in [clavija] + list(clavija.children): ocultar_fuera(o, u0, u1)
+# botones del lateral: tres pulsaciones (niveles 1 → 2 → 3)
+botones = sorted([o for o in raiz.children if o.name.startswith('Boton')], key=lambda o: -o.location.z)
+for o in botones:                                              # botones algo mayores y con aro de oro rosa, como los reales
+    o.scale = (1.35, 1.35, 1.5); o.data.materials[0] = bpy.data.materials['TapaM']; o.location.x = W_ / 2 + 0.0004   # sobresalen del lateral
+    aro = g['cilindro']('AroBoton', 0.0086, 0.0016, o.location + Vector((-0.0016, 0, 0)), bpy.data.materials['OroRosa'], rot=tuple(o.rotation_euler))
+    aro.parent = raiz
+b0 = P['botones'][0]
+for o in botones:
+    base = o.location.copy()
+    for f in (1, b0 + 10, b0 + 13, b0 + 16, b0 + 26, b0 + 29, b0 + 32, b0 + 42, b0 + 45, b0 + 48):
+        dentro = f in (b0 + 13, b0 + 29, b0 + 45) and o is botones[0]
+        o.location = base - Vector((0.0016 if dentro else 0, 0, 0)); o.keyframe_insert('location', frame=f)
+# el dispensador se acerca a la pared y se pega en las placas (plano adhesivo)
+d0, d1 = P['adhesivo']
+for f, y, interp in ((1, 0.0, 'CONSTANT'), (d0 - 1, 0.0, 'CONSTANT'), (d0, -0.16, 'BEZIER'), (d0 + 10, -0.16, 'BEZIER'), (d0 + 38, 0.001, 'BEZIER'),
+                     (d0 + 41, -0.0015, 'BEZIER'), (d0 + 44, 0.0, 'BEZIER')):
+    raiz.location = (X0, PARED_Y - 0.0005 + y, Z0); raiz.keyframe_insert('location', frame=f)
+for fc in g['curvas'](raiz):
+    for k in fc.keyframe_points:
+        if k.co[0] < d0: k.interpolation = 'CONSTANT'
+# versión blanca al lado (solo en el plano final)
+v0, v1 = P['versiones']
+blanca_raiz = bpy.data.objects.new('DispensadorBlanco', None); sc.collection.objects.link(blanca_raiz)
+blanca_raiz.location = (X0 + 0.30, PARED_Y - 0.0005, Z0)
+plast_b = g['micro'](principled('PlasticoBlanco', (0.86, 0.86, 0.84), rug=0.3, coat=0.35, coat_rug=0.15), escala=1400, fuerza=0.03, rug=(0.25, 0.34))
+for o in [o for o in raiz.children if o.type == 'MESH' and not o.name.startswith(('Puerto',))]:
+    c = o.copy(); c.data = o.data.copy(); sc.collection.objects.link(c); c.parent = blanca_raiz
+    c.animation_data_clear(); c.location = o.location.copy(); c.rotation_euler = o.rotation_euler.copy(); c.scale = o.scale.copy()
+    c.data.materials.clear()
+    for m in o.data.materials: c.data.materials.append(plast_b if m and m.name == 'Plastico' else m)
+    ocultar_fuera(c, v0, v1)
+
+# ---------- 6. cámaras de cada plano (una clave por fotograma; en los cortes, salto limpio) ----------
 cd = bpy.data.cameras.new('Movil'); cam = bpy.data.objects.new('Movil', cd); sc.collection.objects.link(cam); sc.camera = cam
-cam.rotation_mode = 'QUATERNION'
-cd.lens = 24; cd.sensor_fit = 'VERTICAL'; cd.sensor_height = 36                         # gran angular del móvil
-cd.dof.use_dof = True; cd.dof.aperture_fstop = 2.0; cd.dof.focus_object = None
+cam.rotation_mode = 'QUATERNION'; cd.sensor_fit = 'VERTICAL'; cd.sensor_height = 36
+cd.dof.use_dof = True; cd.dof.aperture_blades = 7
 def suave(x): x = max(0.0, min(1.0, x)); return x * x * (3 - 2 * x)
-DISP = Vector((-0.04, PARED_Y - 0.09, 1.30))
-P0, P1 = Vector((0.45, -1.75, 1.58)), Vector((0.06, PARED_Y - 0.58, 1.44))               # de la puerta a delante del lavabo
-M0, M1 = Vector((-0.35, PARED_Y, 1.25)), DISP + Vector((0, 0, -0.10))
-for f in range(1, TOTAL + 1):
-    t = suave((f - 1) / 72) if f <= 73 else 1.0
-    pos = P0.lerp(P1, t); mira = M0.lerp(M1, suave((f - 1) / 80))
-    paso = (1 - t) ** 0.5                                                                   # el balanceo de andar se calma al llegar
-    pos += Vector((0.006 * math.sin(f / FPS * 2 * math.pi * 0.95) * paso, 0, 0.011 * abs(math.sin(f / FPS * 2 * math.pi * 0.95)) * paso))
-    pos += Vector((0.0015 * math.sin(f * 0.37), 0.001 * math.sin(f * 0.23), 0.0012 * math.sin(f * 0.41 + 1)))   # pulso de la mano
+def pulso(f, k=1.0):                                            # temblor leve de mano / estabilizador
+    return Vector((0.0015 * math.sin(f * 0.37), 0.001 * math.sin(f * 0.23), 0.0012 * math.sin(f * 0.41 + 1))) * k, \
+           Euler((math.radians(0.35 * math.sin(f * 0.29) * k), math.radians(0.3 * math.sin(f * 0.21 + 2) * k), math.radians(0.5 * math.sin(f * 0.13) * k))).to_quaternion()
+def clave(f, pos, mira, lente, fstop, foco, giro=None, sub=0.0):
     q = (mira - pos).to_track_quat('-Z', 'Y')
-    q = q @ Euler((math.radians(0.35 * math.sin(f * 0.29)), math.radians(0.3 * math.sin(f * 0.21 + 2)), math.radians(0.6 * math.sin(f * 0.13) + 1.2 * paso * math.sin(f / FPS * 2 * math.pi * 0.47)))).to_quaternion()
-    cam.location = pos; cam.rotation_quaternion = q
-    cam.keyframe_insert('location', frame=f); cam.keyframe_insert('rotation_quaternion', frame=f)
-    cd.dof.focus_distance = (DISP - pos).length if f > 40 else (M0 - pos).length; cd.dof.keyframe_insert('focus_distance', frame=f)
-for fc in g['curvas'](cam):
-    for k in fc.keyframe_points: k.interpolation = 'LINEAR'
+    if giro: q = q @ giro
+    cam.location = pos; cam.rotation_quaternion = q; cd.lens = lente; cd.dof.aperture_fstop = fstop; cd.dof.focus_distance = foco
+    for path, idb in (('location', cam), ('rotation_quaternion', cam), ('lens', cd), ('dof.aperture_fstop', cd), ('dof.focus_distance', cd)):
+        idb.keyframe_insert(path, frame=f + sub)
+DISP = Vector((X0, FRENTE, Z0))
+camino = {}
+# 1. entrada: andas con el móvil de la puerta al lavabo
+e0, e1 = P['entrada']
+P0, P1 = Vector((0.45, -1.75, 1.58)), Vector((X0 + 0.02, PARED_Y - 0.62, Z0 + 0.10))
+M0, M1 = Vector((-0.35, PARED_Y, 1.25)), DISP + Vector((0, 0, -0.10))
+for f in range(e0, e1 + 1):
+    t = suave((f - e0) / 72) if f - e0 <= 72 else 1.0
+    pos = P0.lerp(P1, t); mira = M0.lerp(M1, suave((f - e0) / 80)); paso = (1 - t) ** 0.5
+    pos += Vector((0.006 * math.sin(f / FPS * 2 * math.pi * 0.95) * paso, 0, 0.011 * abs(math.sin(f / FPS * 2 * math.pi * 0.95)) * paso))
+    dp, dq = pulso(f); giro = dq @ Euler((0, 0, math.radians(1.2 * paso * math.sin(f / FPS * 2 * math.pi * 0.47)))).to_quaternion()
+    camino[f] = (pos + dp, mira, 24, 2.0, (DISP - pos).length if f - e0 > 40 else (M0 - pos).length, giro)
+# 2. mano: cámara fija colocada para que el dispensador quede donde estaba el real en el vídeo del fabricante
+from bpy_extras.object_utils import world_to_camera_view
+m0, m1 = P['mano']
+ESC_V, BAJA = 1.5, 200
+def obj(px, py): return (px * ESC_V / 1080, 1 - (py * ESC_V + BAJA) / 1920)
+BOQ_OBJ = obj(352, 527); ANCHO_OBJ = obj(715, 0)[0] - obj(100, 0)[0]
+punta = Vector((X0, 0, Z0)) + Vector((g['BOQ'].x, PARED_Y + g['BOQ'].y, g['BOQ'].z - 0.009))
+sc.frame_set(m0); cd.lens = 42; cd.sensor_fit = 'VERTICAL'
+sc.render.resolution_x = args.ancho; sc.render.resolution_y = round(args.ancho * 16 / 9)   # el encaje depende del formato vertical
+DIRM = Vector((0.22, -1.0, 0.02)).normalized(); mira_m = Vector((X0, FRENTE, Z0 - 0.03)); dist = 0.5
+for _ in range(60):
+    cam.location = mira_m + DIRM * dist; cam.rotation_quaternion = (mira_m - cam.location).to_track_quat('-Z', 'Y'); bpy.context.view_layer.update()
+    xs = [world_to_camera_view(sc, cam, Vector((X0 + sx * W_ / 2, PARED_Y + sy, Z0))).x for sx in (-1, 1) for sy in (-D_ - 0.005, 0.0)]
+    pp = world_to_camera_view(sc, cam, punta)
+    dist *= (max(xs) - min(xs)) / ANCHO_OBJ
+    mira_m.x += (pp.x - BOQ_OBJ[0]) * 0.25; mira_m.z += (pp.y - BOQ_OBJ[1]) * 0.35
+print('mano: boquilla', round(pp.x, 3), round(pp.y, 3), 'objetivo', [round(v, 3) for v in BOQ_OBJ], flush=True)
+for f in range(m0, m1 + 1): camino[f] = (mira_m + DIRM * dist, mira_m, 42, 4.0, dist, None)
+# 3. pantalla: deslizamiento lento muy cerca del cristal
+p0, p1 = P['pantalla']
+for f in range(p0, p1 + 1):
+    t = suave((f - p0) / (p1 - p0)); pos = Vector((X0 - 0.07 + 0.14 * t, FRENTE - 0.17 + 0.02 * t, Z0 + 0.035 - 0.01 * t))
+    mira = Vector((X0 - 0.02 + 0.04 * t, FRENTE, Z0 + 0.005)); dp, dq = pulso(f, 0.25)
+    camino[f] = (pos + dp, mira, 55, 4.0, (mira - pos).length, dq)
+# 4. botones: lateral derecho, acercamiento lento
+b0, b1 = P['botones']
+for f in range(b0, b1 + 1):
+    t = suave((f - b0) / (b1 - b0)); pos = Vector((X0 + 0.27 - 0.04 * t, FRENTE - 0.07 + 0.01 * t, Z0 + 0.03))
+    mira = Vector((X0 + 0.115, PARED_Y - D_ * 0.5, Z0)); dp, dq = pulso(f, 0.25)
+    camino[f] = (pos + dp, mira, 50, 5.6, (Vector((X0 + W_ / 2, PARED_Y - D_ / 2, Z0)) - pos).length, dq)
+# 5. apagado: plano medio de frente que se aleja despacio
+a0_, a1_ = P['apagado']
+for f in range(a0_, a1_ + 1):
+    t = suave((f - a0_) / (a1_ - a0_)); pos = Vector((X0 + 0.03, FRENTE - 0.40 - 0.12 * t, Z0 + 0.03)); mira = DISP + Vector((0, 0, -0.01))
+    dp, dq = pulso(f, 0.3); camino[f] = (pos + dp, mira, 40, 2.8, (mira - pos).length, dq)
+# 6. adhesivo: tres cuartos desde la izquierda para ver la separación con la pared
+d0_, d1_ = P['adhesivo']
+for f in range(d0_, d1_ + 1):
+    t = suave((f - d0_) / (d1_ - d0_)); pos = Vector((X0 - 0.30 + 0.04 * t, PARED_Y - 0.40, Z0 + 0.06)); mira = Vector((X0, PARED_Y - 0.08, Z0))
+    dp, dq = pulso(f, 0.3); camino[f] = (pos + dp, mira, 40, 3.2, (mira - pos).length, dq)
+# 7. USB-C: primer plano del lateral derecho
+u0_, u1_ = P['usb']
+for f in range(u0_, u1_ + 1):
+    t = suave((f - u0_) / (u1_ - u0_)); pos = Vector((X0 + 0.22 - 0.02 * t, PARED_Y - 0.17, Z0 + 0.025))
+    mira = Vector((X0 + W_ / 2, PARED_Y - D_ * 0.62, Z0 - 0.004)); dp, dq = pulso(f, 0.25)
+    camino[f] = (pos + dp, mira, 55, 5.0, (mira - pos).length, dq)
+# 8. dos versiones: de frente, acercamiento suave
+v0_, v1_ = P['versiones']; cx = X0 + 0.15
+for f in range(v0_, v1_ + 1):
+    t = suave((f - v0_) / (v1_ - v0_)); pos = Vector((cx, PARED_Y - 1.0 + 0.10 * t, Z0 + 0.02)); mira = Vector((cx, FRENTE, Z0 - 0.01))
+    dp, dq = pulso(f, 0.3); camino[f] = (pos + dp, mira, 26, 2.8, (mira - pos).length, dq)
+fines = {b_ for _, _, b_ in PLANOS}
+for f in range(1, TOTAL + 1):
+    pos, mira, lente, fs, foco, giro = camino[f]; clave(f, pos, mira, lente, fs, foco, giro)
+    if f in fines: clave(f, pos, mira, lente, fs, foco, giro, sub=0.6)     # el obturador no mezcla dos planos en el corte
+for idb in (cam, cd):
+    for fc in g['curvas'](idb):
+        for k in fc.keyframe_points: k.interpolation = 'LINEAR'
 
 # ---------- render ----------
 r = sc.render; r.engine = 'CYCLES'; sc.cycles.device = 'CPU'; sc.cycles.use_adaptive_sampling = True
 sc.cycles.use_denoising = True; sc.cycles.denoiser = 'OPENIMAGEDENOISE'; sc.cycles.denoising_input_passes = 'RGB_ALBEDO_NORMAL'
 sc.cycles.blur_glossy = 0.3; sc.cycles.caustics_reflective = False; sc.cycles.caustics_refractive = False
-r.use_motion_blur = True; r.motion_blur_shutter = 0.5; r.image_settings.file_format = 'PNG'
+r.use_motion_blur = True; r.motion_blur_shutter = 0.5; r.motion_blur_position = 'START'; r.image_settings.file_format = 'PNG'
 r.resolution_x = args.ancho; r.resolution_y = round(args.ancho * 16 / 9); sc.view_settings.view_transform = 'AgX'
 sc.cycles.samples = args.muestras; sc.cycles.max_bounces = 10; sc.cycles.diffuse_bounces = 6
 sc.cycles.adaptive_threshold = 0.01; sc.frame_end = TOTAL

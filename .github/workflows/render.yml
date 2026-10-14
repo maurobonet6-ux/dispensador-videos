@@ -6,13 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       ancho: { description: 'Ancho del render (1080 final; 360 prueba)', default: '1080', type: string }
-      muestras: { description: 'Muestras de Cycles (256 final; 24 prueba)', default: '256', type: string }
+      muestras: { description: 'Muestras de Cycles (128 final; 16 prueba)', default: '128', type: string }
   push:
     branches: [main]
 
 env:
-  TROZOS: 20
-  TOTAL: 105
+  TROZOS: 40
+  TOTAL: 570
   ESCENA: escena_bano.py      # escena.py = teaser del producto solo (90 fotogramas)
   MONTAJE: montaje_bano.py
   INTER: https://github.com/rsms/inter/releases/download/v4.0/Inter-4.0.zip
@@ -27,8 +27,8 @@ jobs:
         env: { MENSAJE: '${{ github.event.head_commit.message }}' }
         run: |
           A="${{ inputs.ancho }}"; M="${{ inputs.muestras }}"
-          if echo "$MENSAJE" | grep -q '\[render prueba'; then A=360; M=24; fi
-          echo "ancho=${A:-1080}" >> $GITHUB_OUTPUT; echo "muestras=${M:-256}" >> $GITHUB_OUTPUT
+          if echo "$MENSAJE" | grep -q '\[render prueba'; then A=360; M=16; fi
+          echo "ancho=${A:-1080}" >> $GITHUB_OUTPUT; echo "muestras=${M:-128}" >> $GITHUB_OUTPUT
 
   render:
     needs: preparar
@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 340
     strategy:
       fail-fast: true
-      matrix: { trozo: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] }
+      matrix: { trozo: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39] }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -68,4 +68,4 @@ jobs:
           ls render | wc -l
           python $MONTAJE render teaser.mp4
       - uses: actions/upload-artifact@v4
-        with: { name: teaser, path: teaser.mp4, retention-days: 30 }
+        with: { name: video, path: teaser.mp4, retention-days: 30 }
