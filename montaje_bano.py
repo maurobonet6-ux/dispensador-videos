@@ -122,7 +122,7 @@ for f in (SOLO or range(1, N + 1)):
     for partes, cy, tam, d_, h_ in TEXTOS.get(n, []):
         im = texto(im, partes, cy, tam, suave((r - d_) / 8) * sale)
     if n == 'botones': im = niveles(im, f, suave((r - 8) / 8) * sale)
-    if n == 'versiones': im = pastilla(im, 'Pídelo hoy', 0.79, 58, suave((r - 50) / 10))
+    if n == 'versiones': im = pastilla(im, 'Pídelo hoy', 0.80, 84, suave((r - 50) / 10))
     im.convert('RGB').save(os.path.join(TMP, f'p{f:04d}.png'))
 
 if SOLO: sys.exit()
